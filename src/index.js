@@ -1,5 +1,15 @@
 import { ApolloServer } from "@apollo/server";
 import { startStandaloneServer } from "@apollo/server/standalone";
+import { RESTDataSource } from "@apollo/datasource-rest";
+import axios from "axios";
+
+class MoviesAPI extends RESTDataSource {
+  baseURL = "https://jsonplaceholder.typicode.com/";
+
+  getMovie() {
+    return axios.get(`${this.baseURL}/posts`).then((res) => res.data);
+  }
+}
 
 // A schema is a collection of type definitions (hence "typeDefs")
 // that together define the "shape" of queries that are executed against
@@ -13,11 +23,19 @@ const typeDefs = `#graphql
     name: String
   }
 
+  type Post {
+    userId: ID!
+    id: ID!
+    title: String
+    body: String
+  }
+
   # The "Query" type is special: it lists all of the available queries that
   # clients can execute, along with the return type for each. In this
   # case, the "books" query returns an array of zero or more Books (defined above).
    type Query {
     user(id: ID!): User
+    movie: [Post]
   }
 `;
 
@@ -45,6 +63,9 @@ const resolvers = {
       console.log(userFound);
       return userFound[0];
     },
+    movie: async (_, args, { dataSources }) => {
+      return dataSources.moviesAPI.getMovie();
+    },
   },
 };
 
@@ -61,6 +82,16 @@ const server = new ApolloServer({
 //  3. prepares your app to handle incoming requests
 const { url } = await startStandaloneServer(server, {
   listen: { port: 4000 },
+  context: async () => {
+    const { cache } = server;
+    return {
+      // We create new instances of our data sources with each request,
+      // passing in our server's cache.
+      dataSources: {
+        moviesAPI: new MoviesAPI({ cache }),
+      },
+    };
+  },
 });
 
 console.log(`🚀  Server ready at: ${url}`);
